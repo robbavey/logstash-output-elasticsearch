@@ -39,20 +39,26 @@ module LogStash; module Outputs; class ElasticSearch;
       retrying_submit(events.map {|e| event_action_tuple(e)})
     end
 
+
     def install_template_after_successful_connection
+      puts "The thread #{Thread.current} is creating a new or reusing #{@template_installer}"
       @template_installer ||= Thread.new do
-          sleep_interval = @retry_initial_interval
-          until successful_connection? || @stopping.true?
-            @logger.debug("Waiting for connectivity to Elasticsearch cluster. Retrying in #{sleep_interval}s")
-            Stud.stoppable_sleep(sleep_interval) { @stopping.true? }
-            sleep_interval = next_sleep_interval(sleep_interval)
-          end
-            install_template if successful_connection?
+        puts "Created: #{Thread.current}"
+        sleep_interval = @retry_initial_interval
+        until successful_connection? || @stopping.true?
+          puts "Retrying Connection:  #{Thread.current}"
+          @logger.debug("Waiting for connectivity to Elasticsearch cluster. Retrying in #{sleep_interval}s")
+          Stud.stoppable_sleep(sleep_interval) { @stopping.true? }
+          sleep_interval = next_sleep_interval(sleep_interval)
         end
+        install_template if successful_connection?
+        puts "Installed: #{Thread.current}"
       end
+    end
 
     def stop_template_installer
       @template_installer.join unless @template_installer.nil?
+      puts "Stopped: #{@template_installer}"
     end
 
     def successful_connection?

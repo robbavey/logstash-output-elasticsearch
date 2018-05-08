@@ -14,12 +14,16 @@ describe "Proxy option" do
   end
 
   after do
-    subject.close
+#    subject.close
   end
 
   describe "valid configs" do
     before do
       subject.register
+    end
+
+    after do 
+     subject.close
     end
 
     context "when specified as a URI" do
