@@ -347,7 +347,6 @@ module LogStash; module Outputs; class ElasticSearch;
     end
 
     def template_put(name, template)
-      puts "******THE TEMPLATE NAME IS #{name}"
       path = "_template/#{name}"
       logger.info("Installing elasticsearch template to #{path}")
       @pool.put(path, nil, LogStash::Json.dump(template))
@@ -392,7 +391,6 @@ module LogStash; module Outputs; class ElasticSearch;
       logger.info("Installing ILM policy #{policy} to #{path}")
       @pool.put(path, nil, LogStash::Json.dump(policy))
     end
-
 
     # Build a bulk item for an elasticsearch update action
     def update_action_builder(args, source)

@@ -272,13 +272,13 @@ module LogStash; module Outputs; class ElasticSearch;
       type = if @document_type
                event.sprintf(@document_type)
              else
-               # if client.maximum_seen_major_version < 6
-               #   event.get("type") || DEFAULT_EVENT_TYPE_ES6
-               # elsif client.maximum_seen_major_version == 6
-               #   DEFAULT_EVENT_TYPE_ES6
-               # else
+               if client.maximum_seen_major_version < 6
+                 event.get("type") || DEFAULT_EVENT_TYPE_ES6
+               elsif client.maximum_seen_major_version == 6
+                 DEFAULT_EVENT_TYPE_ES6
+               else
                  DEFAULT_EVENT_TYPE_ES7
-               # end
+               end
              end
 
       if !(type.is_a?(String) || type.is_a?(Numeric))
@@ -293,7 +293,6 @@ module LogStash; module Outputs; class ElasticSearch;
       sleep_interval = @retry_initial_interval
       begin
         es_actions = actions.map {|action_type, params, event| [action_type, params, event.to_hash]}
-        @logger.error("There are #{actions.count} actions to do")
         response = @client.bulk(es_actions)
         response
       rescue ::LogStash::Outputs::ElasticSearch::HttpClient::Pool::HostUnreachableError => e
