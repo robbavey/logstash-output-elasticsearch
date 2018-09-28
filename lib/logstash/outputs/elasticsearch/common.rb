@@ -1,5 +1,4 @@
 require "logstash/outputs/elasticsearch/template_manager"
-require "logstash/outputs/elasticsearch/ilm_manager"
 
 
 module LogStash; module Outputs; class ElasticSearch;
@@ -10,6 +9,8 @@ module LogStash; module Outputs; class ElasticSearch;
     DOC_DLQ_CODES = [400, 404]
     DOC_SUCCESS_CODES = [200, 201]
     DOC_CONFLICT_CODE = 409
+    DEFAULT_POLICY = "logstash-policy"
+    ILM_POLICY_PATH = "default-ilm-policy.json"
 
     # When you use external versioning, you are communicating that you want
     # to ignore conflicts. More obviously, since an external version is a
