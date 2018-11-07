@@ -192,7 +192,6 @@ if ESHelper.es_version_satisfies?(">= 6.6")
     }
     let (:policy) { small_max_doc_policy }
 
-
     let (:small_max_doc_policy) {
       {"policy" => {
           "phases"=> {
@@ -253,7 +252,6 @@ if ESHelper.es_version_satisfies?(">= 6.6")
 
     context 'with ilm enabled' do
       let (:ilm_enabled) { true }
-
 
       context 'when using the default policy' do
         context 'with a custom pattern' do
