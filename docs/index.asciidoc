@@ -93,6 +93,25 @@ re-indexed to Elasticsearch. If the DLQ is not enabled, and a mapping error
 happens, the problem is logged as a warning, and the event is dropped. See
 <<dead-letter-queues>> for more information about processing events in the DLQ.
 
+[[index-lifecycle-management]]
+==== Index Lifecycle Management
+
+To configure the Elasticsearch output to use Index Lifecycle management, set the `ilm_enabled` flag to true:
+
+Any previously loaded template should be overwritten when ILM is enabled,
+If you have loaded a template before into Elasticsearch with the same version you must overwrite the template. Note: This feature only works with X-Pack Basic.
+
+The default rollover_alias used is {logstash}
+
+Note: If you modify the write_alias or the pattern, the index template will need to be rewritten as the settings index.lifecycle.name and index.lifecycle.rollover_alias change automatically in the template.
+
+If no custom policy is defined, the default policy will be uploaded to Elasticsearch.
+
+Compatibility
+Note that this plugin requires an X-Pack Basic licence on the Elasticsearch server.
+This output works with all compatible versions of Elasticsearch. See the Elastic Support Matrix.
+
+
 ==== Batch Sizes
 
 This plugin attempts to send batches of events as a single request. However, if
@@ -139,6 +158,10 @@ This plugin supports the following configuration options plus the <<plugins-{typ
 | <<plugins-{type}s-{plugin}-healthcheck_path>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-hosts>> |<<uri,uri>>|No
 | <<plugins-{type}s-{plugin}-http_compression>> |<<boolean,boolean>>|No
+| <<plugins-{type}s-{plugin}-ilm_enabled>> |<<boolean,boolean>>|No
+| <<plugins-{type}s-{plugin}-ilm_pattern>> |<<string,string>>|No
+| <<plugins-{type}s-{plugin}-ilm_policy>> |<<string,string>>|No
+| <<plugins-{type}s-{plugin}-ilm_write_alias>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-index>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-keystore>> |a valid filesystem path|No
 | <<plugins-{type}s-{plugin}-keystore_password>> |<<password,password>>|No
@@ -313,6 +336,46 @@ Any special characters present in the URLs here MUST be URL escaped! This means 
   * Default value is `false`
 
 Enable gzip compression on requests. Note that response compression is on by default for Elasticsearch v5.0 and beyond
+
+[id="plugins-{type}s-{plugin}-ilm_enabled"]
+===== `ilm_enabled`
+
+  * Value type is <<boolean,boolean>>
+  * Default value is `false`
+
+Setting this flag to `true` will enable Index Lifecycle Management for Elasticsearch indices. See the Elastic Support Matrix for details of
+which versions of Elasticsearch support Index Lifecycle Management.
+
+[id="plugins-{type}s-{plugin}-ilm_pattern"]
+===== `ilm_pattern`
+
+  * Value type is <<string,string>>
+  * Default value is `000001`
+
+Pattern used for generating Index Lifecycle Management indices. The value specified in the pattern will be appended to
+the write alias, and incremented automatically when a new index is created by ILM.
+
+Note that updating the write alias will require the index template to be rewritten
+
+[id="plugins-{type}s-{plugin}-ilm_policy"]
+===== `ilm_policy`
+
+  * Value type is <<string,string>>
+  * Default value is `logstash`
+
+Modify this setting to use a custom Index Lifecycle Management policy. Note that if this setting is used,
+the policy must already exist in Elasticsearch cluster. If this value is not set, the default policy will
+be automatically installed into Elasticsearch
+
+[id="plugins-{type}s-{plugin}-ilm_write_alias"]
+===== `ilm_write_alias`
+
+  * Value type is <<string,string>>
+  * Default value is `logstash`
+
+The write alias is the alias where indexes managed using Index Lifecycle Management will be written to
+
+Note that updating the write alias will require the index template to be rewritten
 
 [id="plugins-{type}s-{plugin}-index"]
 ===== `index` 
