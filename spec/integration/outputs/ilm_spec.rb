@@ -372,7 +372,6 @@ if ESHelper.es_version_satisfies?(">= 6.6")
         end
       end
       context 'with the default template' do
-        let(:expected_index) { "logstash" }
 
         it 'should create the rollover alias' do
           expect(@es.indices.exists_alias(index: expected_index)).to be_falsey
@@ -470,7 +469,7 @@ if ESHelper.es_version_satisfies?(">= 6.6")
         expect(@es.get_alias).to be_empty
         subject.register
         sleep(1)
-        expect(@es.get_alias).to be_empty
+        expect(@es.indices.exists_alias(index: ilm_write_alias)).to be_falsey
       end
 
       it 'should not install the default policy' do
