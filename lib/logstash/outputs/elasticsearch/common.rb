@@ -33,13 +33,6 @@ module LogStash; module Outputs; class ElasticSearch;
       @logger.info("New Elasticsearch output", :class => self.class.name, :hosts => @hosts.map(&:sanitized).map(&:to_s))
     end
 
-    def setup_ilm
-      # ilm fields :ilm_enabled, :ilm_write_alias, :ilm_pattern, :ilm_policy
-      # As soon as the template is loaded, check for existence of write alias:
-      ILMManager.maybe_create_write_alias(self, @ilm_write_alias)
-      ILMManager.maybe_create_ilm_policy(self, @ilm_policy)
-    end
-
     # Receive an array of events and immediately attempt to index them (no buffering)
     def multi_receive(events)
       until @template_installed.true?
