@@ -94,22 +94,89 @@ happens, the problem is logged as a warning, and the event is dropped. See
 <<dead-letter-queues>> for more information about processing events in the DLQ.
 
 [[index-lifecycle-management]]
-==== Index Lifecycle Management
+==== Index Lifecycle Management (Beta)
 
 To configure the Elasticsearch output to use Index Lifecycle management, set the `ilm_enabled` flag to true:
 
-Any previously loaded template should be overwritten when ILM is enabled,
-If you have loaded a template before into Elasticsearch with the same version you must overwrite the template. Note: This feature only works with X-Pack Basic.
+[source,ruby]
+    output {
+      elasticsearch {
+        ilm_enabled => true
+      }
+    }
 
-The default rollover_alias used is {logstash}
+This will overwrite the index settings and adjust the Logstash template to contain the correct settings.
 
-Note: If you modify the write_alias or the pattern, the index template will need to be rewritten as the settings index.lifecycle.name and index.lifecycle.rollover_alias change automatically in the template.
+Note: If you previously loaded a template into Elasticsearch you must overwrite the template.
+Note: This feature only works with X-Pack Basic.
 
-If no custom policy is defined, the default policy will be uploaded to Elasticsearch.
+The default `rollover_alias` used is `logstash`. The default pattern used for the rollover index is `{now-d}-000001`. It can be adjusted with the
+`ilm.pattern` config.
 
-Compatibility
-Note that this plugin requires an X-Pack Basic licence on the Elasticsearch server.
-This output works with all compatible versions of Elasticsearch. See the Elastic Support Matrix.
+Note: If you modify `ilm_rollover_alias` or `ilm_pattern` you have to overwrite the index template again as the settings
+`index.lifecycle.name` and `index.lifecycle.rollover_alias` change automatically in the template.
+
+For ilm pattern, date math can be used, see https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-rollover-index.html#_using_date_math_with_the_rollover_api[the rollover docs] for more details.
+
+The default policy will be installed automatically into Elasticsearch. The default policy is defined as follows:
+
+A custom policy can also be used
+
+==== Expert ILM setups
+
+WARNING: In general we only recommend you to modify the settings below if you know what you are doing.
+
+The current ILM settings are focused on the most common use cases with an automated alias setup. It is
+possible to for example use multiple write alias with dynamic index patterns but it requires manual
+setup of the write alias. Here is a guide on the configuration options that will need a change.
+
+Let's assume we have an index pattern `foo-%{event.module}` and `event.module` can have the values `system`
+and `apache`. The first thing that must be done is setting up a rollover index for `foo-system` and
+`foo-apache`. For details on how to do this see https://www.elastic.co/guide/en/elasticsearch/reference/master/indices-rollover-index.html#_using_date_math_with_the_rollover_api[Rollover Index docs].
+
+The next step is to set the index pattern in the Elasticsearch output.
+
+[source,ruby]
+    output {
+      elasticsearch {
+        ilm_enabled => false
+        index => "foo-%{event.module}"
+      }
+    }
+
+
+This assumes every event contains `event.module` as otherwise the above will not work. As the index name
+is changed, the template name, template pattern, rollover_alias and lifecycle.name as index settings have to be set.
+
+The best way to set these is through an Elasticsearch template. It's possible to disable
+the template loading in Logstash and set them in your own template. Or, if you are using Logstash to
+install your custom template, set the template name to match the index values - eg
+```
+  "template": "foo-*"
+```
+
+and set the following `index.lifecycle
+add the following lines to the `settings` section in the template:
+
+```
+    "index.lifecycle.name": "foo",
+    "index.lifecycle.rollover_alias": "foo-000001"
+```
+
+eg
+
+[source,json]
+{
+  "template" : "foo-*",
+  "settings" : {
+     :
+    "index.lifecycle.name": "foo",
+    "index.lifecycle.rollover_alias": "foo-000001"
+  }
+
+
+With all the above settings manually set it's important to NOT set `ilm_enabled` as otherwise all the above
+settings would be overwritten.
 
 
 ==== Batch Sizes
@@ -350,10 +417,11 @@ which versions of Elasticsearch support Index Lifecycle Management.
 ===== `ilm_pattern`
 
   * Value type is <<string,string>>
-  * Default value is `000001`
+  * Default value is `{now/d}-000001`
 
 Pattern used for generating Index Lifecycle Management indices. The value specified in the pattern will be appended to
-the write alias, and incremented automatically when a new index is created by ILM.
+the write alias, and incremented automatically when a new index is created by ILM. The default value uses date math,
+so will be populated with the date the index is created.
 
 Note that updating the write alias will require the index template to be rewritten
 
@@ -368,14 +436,14 @@ the policy must already exist in Elasticsearch cluster. If this value is not set
 be automatically installed into Elasticsearch
 
 [id="plugins-{type}s-{plugin}-ilm_write_alias"]
-===== `ilm_write_alias`
+===== `ilm_rollover_alias`
 
   * Value type is <<string,string>>
   * Default value is `logstash`
 
-The write alias is the alias where indexes managed using Index Lifecycle Management will be written to
+The rollover alias is the alias where indexes managed using Index Lifecycle Management will be written to
 
-Note that updating the write alias will require the index template to be rewritten
+Note that updating the rollver alias will require the index template to be rewritten
 
 [id="plugins-{type}s-{plugin}-index"]
 ===== `index` 
