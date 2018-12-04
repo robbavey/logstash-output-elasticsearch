@@ -368,8 +368,9 @@ module LogStash; module Outputs; class ElasticSearch;
 
     def setup_ilm
       return unless ilm_enabled?
-      # As soon as the template is loaded, check for existence of write alias:
-      maybe_create_write_alias
+      logger.info("Using Index lifecycle management - this feature is currently in beta.")
+      # As soon as the template is loaded, check for existence of rollover alias:
+      maybe_create_rollover_alias
       maybe_create_ilm_policy
     end
 
@@ -403,10 +404,9 @@ module LogStash; module Outputs; class ElasticSearch;
     end
 
     def verify_ilm_config
-      # Default index name is logstash-XXXX and the default write alias is logstash - should we just change overwrite the default index name here?
-      @index = @ilm_write_alias if @index == LogStash::Outputs::ElasticSearch::CommonConfigs::DEFAULT_INDEX_NAME
-      raise LogStash::ConfigurationError, "ILM configuration error: The index name #{@index} does not match the write alias #{@ilm_write_alias}" if @ilm_write_alias != @index
-      raise LogStash::ConfigurationError, "ILM configuration error: The template name #{@template_name} does not match the write alias #{@ilm_write_alias}" if @ilm_write_alias != @template_name
+      # Overwrite the index with the rollover alias.
+      @logger.warn "Overwriting index name with rollover alias #{@ilm_rollover_alias}" if @index != LogStash::Outputs::ElasticSearch::CommonConfigs::DEFAULT_INDEX_NAME
+      @index = @ilm_rollover_alias
       verify_ilm_policy unless ilm_policy_default?
     end
 
@@ -428,18 +428,18 @@ module LogStash; module Outputs; class ElasticSearch;
       end
     end
 
-    def maybe_create_write_alias
-      client.write_alias_put(write_alias_target, write_alias_payload) unless client.write_alias_exists?(ilm_write_alias)
+    def maybe_create_rollover_alias
+      client.rollover_alias_put(rollover_alias_target, rollover_alias_payload) unless client.rollover_alias_exists?(ilm_rollover_alias)
     end
 
-    def write_alias_target
-      "#{ilm_write_alias}-#{ilm_pattern}"
+    def rollover_alias_target
+      "<#{ilm_rollover_alias}-#{ilm_pattern}>"
     end
 
-    def write_alias_payload
+    def rollover_alias_payload
       {
           "aliases" => {
-              ilm_write_alias =>{
+              ilm_rollover_alias =>{
                   "is_write_index" =>  true
               }
           }

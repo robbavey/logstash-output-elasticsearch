@@ -354,15 +354,25 @@ module LogStash; module Outputs; class ElasticSearch;
 
     # ILM methods
 
-    # check whether write alias already exists
-    def write_alias_exists?(name)
+    # check whether rollover alias already exists
+    def rollover_alias_exists?(name)
       exists?(name)
     end
 
-    # Create a new write alias
-    def write_alias_put(alias_name, alias_definition)
-      logger.info("Creating write alias #{alias_name}")
-      @pool.put(alias_name, nil, LogStash::Json.dump(alias_definition))
+    # Create a new rollover alias
+    def rollover_alias_put(alias_name, alias_definition)
+      logger.info("Creating rollover alias #{alias_name}")
+      begin
+        @pool.put(CGI::escape(alias_name), nil, LogStash::Json.dump(alias_definition))
+      # If the rollover alias already exists, ignore the error that comes back from Elasticsearch
+      #
+      rescue ::LogStash::Outputs::ElasticSearch::HttpClient::Pool::BadResponseCodeError => e
+        if e.response_code == 400
+            logger.info("Rollover Alias #{alias_name} already exists. Skipping")
+            return
+        end
+        raise e
+      end
     end
 
     def get_xpack_info
