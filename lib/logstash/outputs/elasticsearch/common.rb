@@ -121,7 +121,6 @@ module LogStash; module Outputs; class ElasticSearch;
       client.maximum_seen_major_version
     end
 
-
     def routing_field_name
       maximum_seen_major_version >= 6 ? :routing : :_routing
     end
