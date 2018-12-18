@@ -392,6 +392,7 @@ module LogStash; module Outputs; class ElasticSearch;
       @pool.put(path, nil, LogStash::Json.dump(policy))
     end
 
+
     # Build a bulk item for an elasticsearch update action
     def update_action_builder(args, source)
       if args[:_script]

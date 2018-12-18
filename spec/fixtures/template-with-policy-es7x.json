@@ -31,6 +31,7 @@
       "properties" : {
         "@timestamp": { "type": "date"},
         "@version": { "type": "keyword"},
+        "custom": { "type": "keyword"},
         "geoip"  : {
           "dynamic": true,
           "properties" : {

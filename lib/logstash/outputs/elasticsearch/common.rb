@@ -1,16 +1,13 @@
 require "logstash/outputs/elasticsearch/template_manager"
 
-
 module LogStash; module Outputs; class ElasticSearch;
   module Common
-    attr_reader :client, :hosts, :ilm_manager
+    attr_reader :client, :hosts
 
     # These codes apply to documents, not at the request level
     DOC_DLQ_CODES = [400, 404]
     DOC_SUCCESS_CODES = [200, 201]
     DOC_CONFLICT_CODE = 409
-    DEFAULT_POLICY = "logstash-policy"
-    ILM_POLICY_PATH = "default-ilm-policy.json"
 
     # When you use external versioning, you are communicating that you want
     # to ignore conflicts. More obviously, since an external version is a
@@ -69,6 +66,7 @@ module LogStash; module Outputs; class ElasticSearch;
     def event_action_tuple(event)
 
       action = event.sprintf(@action)
+      maybe_create_template_and_alias_for_ilm(event)
 
       params = {
         :_id => @document_id ? event.sprintf(@document_id) : nil,
@@ -130,7 +128,7 @@ module LogStash; module Outputs; class ElasticSearch;
     end
 
     def install_template
-      TemplateManager.install_template(self)
+      TemplateManager.install_template(self) unless ilm_interpolation?
       @template_installed.make_true
     end
 

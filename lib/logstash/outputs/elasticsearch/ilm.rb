@@ -17,6 +17,10 @@ module LogStash; module Outputs; class ElasticSearch
       @ilm_enabled
     end
 
+    def ilm_interpolation?
+      ilm_enabled? && @ilm_rollover_alias.include?("%")
+    end
+
     def verify_ilm_readiness
       return unless ilm_enabled?
 
@@ -47,6 +51,17 @@ module LogStash; module Outputs; class ElasticSearch
     end
 
     private
+    def maybe_create_template_and_alias_for_ilm(event)
+      return unless ilm_interpolation?
+
+      rollover_alias = event.sprintf(@ilm_rollover_alias)
+      @used_indices ||= Set.new
+      unless @used_indices.include?(rollover_alias)
+        TemplateManager.install_template(self, rollover_alias)
+        client.rollover_alias_put(rollover_alias_target(rollover_alias), rollover_alias_payload(rollover_alias)) unless client.rollover_alias_exists?(rollover_alias)
+        @used_indices << rollover_alias
+      end
+    end
 
     def ilm_policy_default?
       ilm_policy == LogStash::Outputs::ElasticSearch::DEFAULT_POLICY
@@ -59,17 +74,23 @@ module LogStash; module Outputs; class ElasticSearch
     end
 
     def maybe_create_rollover_alias
-      client.rollover_alias_put(rollover_alias_target, rollover_alias_payload) unless client.rollover_alias_exists?(ilm_rollover_alias)
+      return if ilm_interpolation?
+      @logger.warn "Overwriting supplied index name with rollover alias #{@ilm_rollover_alias}" if @index != LogStash::Outputs::ElasticSearch::CommonConfigs::DEFAULT_INDEX_NAME
+      create_rollover_alias(@ilm_rollover_alias)
     end
 
-    def rollover_alias_target
-      "<#{ilm_rollover_alias}-#{ilm_pattern}>"
+    def create_rollover_alias(rollover_alias)
+      client.rollover_alias_put(rollover_alias_target(rollover_alias), rollover_alias_payload(rollover_alias)) unless client.rollover_alias_exists?(rollover_alias)
     end
 
-    def rollover_alias_payload
+    def rollover_alias_target(rollover_alias)
+      "<#{rollover_alias}-#{ilm_pattern}>"
+    end
+
+    def rollover_alias_payload(rollover_alias)
       {
           'aliases' => {
-              ilm_rollover_alias =>{
+              rollover_alias =>{
                   'is_write_index' =>  true
               }
           }
