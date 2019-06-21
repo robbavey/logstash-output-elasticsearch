@@ -1,19 +1,14 @@
 module LogStash; module Outputs; class ElasticSearch
   class TemplateManager
     # To be mixed into the elasticsearch plugin base
-    def self.install_template(plugin)
+    def self.install_template(plugin, rollover_alias = nil)
       return unless plugin.manage_template
-      if plugin.template.nil?
-        plugin.logger.info("Using default mapping template")
-      else
-        plugin.logger.info("Using mapping template from", :path => plugin.template)
-      end
-
-
+      plugin.logger.info("Using mapping template from", :path => plugin.template)
       template = get_template(plugin.template, plugin.maximum_seen_major_version)
-      add_ilm_settings_to_template(plugin, template) if plugin.ilm_in_use?
+      add_ilm_settings_to_template(plugin, template, rollover_alias) if plugin.ilm_in_use?
       plugin.logger.info("Attempting to install template", :manage_template => template)
-      install(plugin.client, template_name(plugin), template, plugin.template_overwrite)
+      template_name = rollover_alias.nil? ? template_name(plugin) : rollover_alias
+      install(plugin.client, template_name, template,plugin.template_overwrite)
     rescue => e
       plugin.logger.error("Failed to install template.", :message => e.message, :class => e.class.name, :backtrace => e.backtrace)
     end
@@ -28,15 +23,17 @@ module LogStash; module Outputs; class ElasticSearch
       client.template_install(template_name, template, template_overwrite)
     end
 
-    def self.add_ilm_settings_to_template(plugin, template)
+    def self.add_ilm_settings_to_template(plugin, template, rollover_alias)
+      plugin.logger.info("Overwriting index patterns, as ILM is enabled.")
+      rollover_alias = plugin.ilm_rollover_alias if rollover_alias.nil?
       # Overwrite any index patterns, and use the rollover alias. Use 'index_patterns' rather than 'template' for pattern
       # definition - remove any existing definition of 'template'
       template.delete('template') if template.include?('template')
-      template['index_patterns'] = "#{plugin.ilm_rollover_alias}-*"
+      template['index_patterns'] = "#{rollover_alias}-*"
       if template['settings'] && (template['settings']['index.lifecycle.name'] || template['settings']['index.lifecycle.rollover_alias'])
         plugin.logger.info("Overwriting index lifecycle name and rollover alias as ILM is enabled.")
       end
-      template['settings'].update({ 'index.lifecycle.name' => plugin.ilm_policy, 'index.lifecycle.rollover_alias' => plugin.ilm_rollover_alias})
+      template['settings'].update({ 'index.lifecycle.name' => plugin.ilm_policy, 'index.lifecycle.rollover_alias' => rollover_alias})
     end
 
     # Template name - if template_name set, use it

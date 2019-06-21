@@ -30,7 +30,6 @@ module ESHelper
     Time.now.strftime("%Y.%m.%d")
   end
 
-
   def default_mapping_from_mappings(mappings)
     if ESHelper.es_version_satisfies?(">=7")
       mappings
@@ -39,10 +38,17 @@ module ESHelper
     end
   end
 
+  def field_type_mapping_from_template(template_name, field)
+    mapping_from_template(template_name)["properties"][field]["type"]
+  end
+
   def field_properties_from_template(template_name, field)
+    mapping_from_template(template_name)["properties"][field]["properties"]
+  end
+
+  def mapping_from_template(template_name)
     mappings = @es.indices.get_template(name: template_name)[template_name]["mappings"]
-    mapping = default_mapping_from_mappings(mappings)
-    mapping["properties"][field]["properties"]
+    default_mapping_from_mappings(mappings)
   end
 
   def routing_field_name

@@ -91,6 +91,99 @@ shared_examples_for 'an ILM enabled Logstash' do
   end
 end
 
+shared_examples_for 'an ILM enabled Logstash using index interpolation' do
+
+  it 'should create the alias' do
+    subject.register
+    sleep(5)
+
+    subject.multi_receive([
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                              LogStash::Event.new("number" => "three")
+                          ])
+
+    sleep(6)
+
+    expect(@es.get_alias(name: "foo-one")).to include("foo-one-#{todays_date}-000001")
+    expect(@es.get_alias(name: "foo-two")).to include("foo-two-#{todays_date}-000001")
+    expect(@es.get_alias(name: "foo-three")).to include("foo-three-#{todays_date}-000001")
+  end
+
+  it 'should rollover multiple types' do
+    subject.register
+    sleep(5)
+
+    subject.multi_receive([
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                          ])
+
+    sleep(6)
+
+    subject.multi_receive([
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                          ])
+
+    sleep(6)
+
+    subject.multi_receive([
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                          ])
+
+    @es.indices.refresh
+
+    # Wait or fail until everything's indexed.
+    Stud::try(20.times) do
+      r = @es.search
+      expect(r).to have_hits(18)
+    end
+    indexes_written = @es.search(size: 18)['hits']['hits'].each_with_object(Hash.new(0)) do |x, res|
+      index_written = x['_index']
+      res[index_written] += 1
+    end
+
+    expect(indexes_written.count).to eq(6)
+    expect(indexes_written["foo-one-#{todays_date}-000001"]).to eq(3)
+    expect(indexes_written["foo-one-#{todays_date}-000002"]).to eq(3)
+    expect(indexes_written["foo-one-#{todays_date}-000003"]).to eq(3)
+    expect(indexes_written["foo-two-#{todays_date}-000001"]).to eq(3)
+    expect(indexes_written["foo-two-#{todays_date}-000002"]).to eq(3)
+    expect(indexes_written["foo-two-#{todays_date}-000003"]).to eq(3)
+  end
+
+  it 'should create the templates' do
+    subject.register
+    sleep(5)
+
+    subject.multi_receive([
+                              LogStash::Event.new("number" => "one"),
+                              LogStash::Event.new("number" => "two"),
+                              LogStash::Event.new("number" => "three")
+                          ])
+
+    sleep(6)
+    # expect (field_properties_from_template("foo-one", '@version')).to eq("keyword")
+    expect(field_type_mapping_from_template("foo-one", '@version')).to eq("keyword")
+    expect(field_type_mapping_from_template("foo-two", '@version')).to eq("keyword")
+    expect(field_type_mapping_from_template("foo-three", '@version')).to eq("keyword")
+  end
+
+end
 shared_examples_for 'an ILM disabled Logstash' do
   it 'should not create a rollover alias' do
     expect(@es.get_alias).to be_empty
@@ -480,6 +573,144 @@ if ESHelper.es_version_satisfies?(">= 6.6")
           end
         end
 
+      end
+      context 'with the default template with index interpolation' do
+        let (:ilm_rollover_alias) { "foo-%{[number]}" }
+        let (:ilm_enabled) { true }
+        let (:ilm_policy_name) { "custom-policy" }
+        let (:policy) { small_max_doc_policy }
+        let (:settings) { super.merge(
+            "ilm_enabled" => ilm_enabled,
+            "ilm_rollover_alias" => ilm_rollover_alias,
+            "ilm_policy" => ilm_policy_name
+        )}
+
+        before :each do
+          put_policy(@es,ilm_policy_name, policy)
+        end
+
+        it_behaves_like 'an ILM enabled Logstash using index interpolation'
+
+      end
+
+      context 'with a custom template and index interpolation' do
+        let (:ilm_policy_name) { "custom-policy" }
+        let (:ilm_rollover_alias) { "foo-%{[number]}" }
+        let (:template_name) { "custom" }
+        if ESHelper.es_version_satisfies?(">= 7.0")
+          let (:template) { "spec/fixtures/template-with-policy-es7x.json" }
+        else
+          let (:template) { "spec/fixtures/template-with-policy-es6x.json" }
+        end
+        let (:ilm_enabled) { true }
+        let (:settings) { super.merge(
+                                "ilm_enabled" => ilm_enabled,
+                                "template" => template,
+                                "template_name" => template_name,
+                                "ilm_rollover_alias" => ilm_rollover_alias,
+                                "ilm_policy" => ilm_policy_name
+        )}
+        let (:policy) { small_max_doc_policy }
+
+        before :each do
+          put_policy(@es,ilm_policy_name, policy)
+        end
+
+        it_behaves_like 'an ILM enabled Logstash using index interpolation'
+
+        context 'when a non-ilm template already exists' do
+          let(:pre_template) {
+            LogStash::Json.load(::IO.read(template_location))
+          }
+
+          if ESHelper.es_version_satisfies?(">= 7.0")
+            let (:template_location) { "lib/logstash/outputs/elasticsearch/elasticsearch-template-es7x.json" }
+          else
+            let (:template_location) { "lib/logstash/outputs/elasticsearch/elasticsearch-template-es6x.json" }
+          end
+
+
+          before :each do
+            @es.indices.put_template(name: "foo-one", body: LogStash::Json.dump(pre_template))
+            @es.indices.put_template(name: "foo-two", body: LogStash::Json.dump(pre_template))
+            @es.indices.put_template(name: "foo-three", body: LogStash::Json.dump(pre_template))
+          end
+
+
+          context 'with overwrite_template set to true' do
+            let (:settings) { super.merge(
+                "template_overwrite" => true
+            )}
+
+            it_behaves_like 'an ILM enabled Logstash using index interpolation'
+          end
+
+          context 'without overwrite template' do
+            it 'should not rollover the indices' do
+              subject.register
+              sleep(5)
+
+              subject.multi_receive([
+                                        LogStash::Event.new("number" => "one"),
+                                        LogStash::Event.new("number" => "two"),
+                                        LogStash::Event.new("number" => "one"),
+                                        LogStash::Event.new("number" => "two"),
+                                        LogStash::Event.new("number" => "one"),
+                                        LogStash::Event.new("number" => "two"),
+                                    ])
+
+              sleep(6)
+
+              subject.multi_receive([
+                                        LogStash::Event.new("number" => "one"),
+                                        LogStash::Event.new("number" => "two"),
+                                        LogStash::Event.new("number" => "one"),
+                                        LogStash::Event.new("number" => "two"),
+                                        LogStash::Event.new("number" => "one"),
+                                        LogStash::Event.new("number" => "two"),
+                                    ])
+
+              sleep(6)
+
+              subject.multi_receive([
+                                        LogStash::Event.new("number" => "one"),
+                                        LogStash::Event.new("number" => "two"),
+                                        LogStash::Event.new("number" => "one"),
+                                        LogStash::Event.new("number" => "two"),
+                                        LogStash::Event.new("number" => "one"),
+                                        LogStash::Event.new("number" => "two"),
+                                    ])
+
+              @es.indices.refresh
+
+              # Wait or fail until everything's indexed.
+              Stud::try(20.times) do
+                r = @es.search
+                expect(r).to have_hits(18)
+              end
+              indexes_written = @es.search(size: 18)['hits']['hits'].each_with_object(Hash.new(0)) do |x, res|
+                index_written = x['_index']
+                res[index_written] += 1
+              end
+
+              expect(indexes_written.count).to eq(2)
+              expect(indexes_written["foo-one-#{todays_date}-000001"]).to eq(9)
+              expect(indexes_written["foo-two-#{todays_date}-000001"]).to eq(9)
+            end
+          end
+
+          context 'when the write alias already exists' do
+            let (:settings) { super.merge(
+                "template_overwrite" => true
+            )}
+
+            before :each do
+              put_alias(@es, "#{ilm_rollover_alias}-#{todays_date}-000001", ilm_rollover_alias)
+            end
+
+            it_behaves_like 'an ILM enabled Logstash using index interpolation'
+          end
+        end
       end
     end
 

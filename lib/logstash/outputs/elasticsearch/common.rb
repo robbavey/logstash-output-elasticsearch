@@ -64,8 +64,8 @@ module LogStash; module Outputs; class ElasticSearch;
 
     # Convert the event into a 3-tuple of action, params, and event
     def event_action_tuple(event)
-
       action = event.sprintf(@action)
+      maybe_create_template_and_alias_for_ilm(event)
 
       params = {
         :_id => @document_id ? event.sprintf(@document_id) : nil,
@@ -127,7 +127,7 @@ module LogStash; module Outputs; class ElasticSearch;
     end
 
     def install_template
-      TemplateManager.install_template(self)
+      TemplateManager.install_template(self) unless ilm_interpolation?
       @template_installed.make_true
     end
 
